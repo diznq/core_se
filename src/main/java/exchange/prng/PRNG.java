@@ -1,4 +1,4 @@
-package sim.stock_exchange.prng;
+package exchange.prng;
 
 import java.util.Random;
 

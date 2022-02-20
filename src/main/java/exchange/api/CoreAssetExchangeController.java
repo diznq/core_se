@@ -1,13 +1,13 @@
-package sim.stock_exchange.api;
+package exchange.api;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import sim.stock_exchange.core.Account;
-import sim.stock_exchange.core.AssetRepository;
-import sim.stock_exchange.core.Order;
-import sim.stock_exchange.core.OrderBook;
-import sim.stock_exchange.view.*;
+import exchange.core.Account;
+import exchange.core.AssetRepository;
+import exchange.core.Order;
+import exchange.core.OrderBook;
+import exchange.view.*;
 
 
 @RestController

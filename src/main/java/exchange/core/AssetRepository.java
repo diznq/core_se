@@ -1,4 +1,4 @@
-package sim.stock_exchange.core;
+package exchange.core;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class AssetRepository {
-    
+
     Map<Long, Account> accounts = new ConcurrentHashMap<>();
     Map<String, Long> ids = new ConcurrentHashMap<>();
     Map<Long, String> idsReverse = new ConcurrentHashMap<>();

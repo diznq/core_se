@@ -1,4 +1,4 @@
-package sim.stock_exchange.core;
+package exchange.core;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.slf4j.Logger;

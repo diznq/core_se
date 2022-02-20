@@ -1,10 +1,10 @@
-package sim.stock_exchange.view;
-
-import sim.stock_exchange.core.Account;
-import sim.stock_exchange.core.AssetRepository;
+package exchange.view;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import exchange.core.Account;
+import exchange.core.AssetRepository;
 
 public class AccountView {
     public long id;

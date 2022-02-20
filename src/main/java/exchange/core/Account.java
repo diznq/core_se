@@ -1,4 +1,4 @@
-package sim.stock_exchange.core;
+package exchange.core;
 
 import java.util.HashMap;
 import java.util.Map;

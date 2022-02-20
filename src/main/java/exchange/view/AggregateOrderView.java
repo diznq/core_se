@@ -1,4 +1,4 @@
-package sim.stock_exchange.view;
+package exchange.view;
 
 public class AggregateOrderView {
     public long price;

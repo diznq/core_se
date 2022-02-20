@@ -1,13 +1,13 @@
-package sim.stock_exchange.view;
-
-import sim.stock_exchange.core.AssetRepository;
-import sim.stock_exchange.core.Order;
-import sim.stock_exchange.core.OrderBook;
-import sim.stock_exchange.core.Tx;
+package exchange.view;
 
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+
+import exchange.core.AssetRepository;
+import exchange.core.Order;
+import exchange.core.OrderBook;
+import exchange.core.Tx;
 
 public class OrderBookView {
     public String left;
