@@ -2,6 +2,8 @@ package exchange.core;
 
 import java.util.function.Consumer;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 public class Order {
     long id;
     long price;
@@ -98,7 +100,12 @@ public class Order {
         this.callback = callback;
     }
 
+    @JsonIgnore
     public Consumer<Tx> getCallback() {
         return callback;
+    }
+
+    public long getId() {
+        return id;
     }
 }
