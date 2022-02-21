@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class OrderBook {
-    final AtomicLong lastPrice = new AtomicLong(100L);
+    final AtomicLong lastPrice = new AtomicLong(1L);
     @JsonIgnore
     final PriorityQueue<Order> bid = new PriorityQueue<>(Order::inverseCompare);
     @JsonIgnore
@@ -19,9 +19,9 @@ public class OrderBook {
     final Logger log = LoggerFactory.getLogger(OrderBook.class);
 
     final List<Tx> prices = Collections.synchronizedList(new ArrayList<>());
-    long left = 0L;
-    long right = 0L;
-    String name = "EURXCC";
+    long left;
+    long right;
+    String name;
 
     public OrderBook(long baseId, long quoteId, String name) {
         this.name = name;
@@ -56,8 +56,6 @@ public class OrderBook {
                 continue;
             }
             if (!repo.hasEnough(bidPeek.account, right, bidPeek.price * bidPeek.volume)) {
-                //log.error("Bidder {} doesn't have promised volume of {} {} to make a purchase", repo.getSymbol
-                // (bidPeek.account), bidPeek.price * bidPeek.volume, repo.getSymbol(right));
                 bidsToRemove.add(bidPeek);
                 continue;
             }
@@ -67,8 +65,6 @@ public class OrderBook {
                     continue;
                 }
                 if (!repo.hasEnough(askPeek.account, left, askPeek.volume)) {
-                    //log.error("Asker {} doesn't have promised volume of {} {} to sell", repo.getSymbol(askPeek
-                    // .account), askPeek.volume, repo.getSymbol(left));
                     asksToRemove.add(askPeek);
                     continue;
                 }
@@ -150,16 +146,10 @@ public class OrderBook {
     }
 
     public Order getTopBid() {
-        for (Order order : bid) {
-            return order;
-        }
-        return null;
+        return bid.peek();
     }
 
     public Order getTopAsk() {
-        for (Order order : ask) {
-            return order;
-        }
-        return null;
+        return ask.peek();
     }
 }

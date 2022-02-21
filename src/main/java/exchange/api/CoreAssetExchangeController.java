@@ -1,5 +1,9 @@
 package exchange.api;
 
+import exchange.vm.Compiler;
+import exchange.vm.Script;
+import exchange.vm.ScriptResult;
+import exchange.vm.VM;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -8,6 +12,8 @@ import exchange.core.AssetRepository;
 import exchange.core.Order;
 import exchange.core.OrderBook;
 import exchange.view.*;
+
+import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
 
 @RestController
@@ -78,5 +84,15 @@ public class CoreAssetExchangeController {
             matches += assetRepository.advance();
         }
         return matches;
+    }
+
+    @PostMapping("/compile")
+    public Script compile(@RequestBody String script) {
+        return Compiler.compile(script);
+    }
+
+    @PostMapping("/exec")
+    public ScriptResult exec(@RequestBody String script) {
+        return VM.exec(Compiler.compile(script)).result();
     }
 }
