@@ -1,10 +1,10 @@
 package exchange.view;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import exchange.core.Account;
 import exchange.core.AssetRepository;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class AccountView {
     public long id;

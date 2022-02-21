@@ -15,17 +15,17 @@ public class VM {
     long executionTime = 0L;
     boolean halted = false;
 
-    public static VM exec(Script script){
+    public static VM exec(Script script) {
         VM vm = new VM();
         vm.run(script);
         return vm;
     }
 
-    public void run(Script script){
+    public void run(Script script) {
         startTime = System.currentTimeMillis();
         List<Instruction> instructions = script.instructions;
         int maxExecuted = script.maxInstructions;
-        while(!halted && instructionPointer < instructions.size() && (maxExecuted == 0 || executedInstructions < maxExecuted)){
+        while (!halted && instructionPointer < instructions.size() && (maxExecuted == 0 || executedInstructions < maxExecuted)) {
             exec(instructions.get(instructionPointer));
             instructionPointer += 1;
             executedInstructions++;
@@ -33,88 +33,79 @@ public class VM {
         executionTime = System.currentTimeMillis() - startTime;
     }
 
-    private void exec(Instruction inst){
-        int a = 0;
-        int b = 0;
-        switch(inst.condition){
+    private void exec(Instruction inst) {
+        int a;
+        int b;
+
+        switch (inst.condition) {
             case EQ:
-                if(zf != 0) return;
+                if (zf != 0) return;
                 break;
             case LT:
-                if(zf >= 0) return;
+                if (zf >= 0) return;
                 break;
             case GT:
-                if(zf <= 0) return;
+                if (zf <= 0) return;
                 break;
             case LE:
-                if(zf > 0) return;
+                if (zf > 0) return;
                 break;
             case GE:
-                if(zf < 0) return;
+                if (zf < 0) return;
                 break;
             case NE:
-                if(zf == 0) return;
+                if (zf == 0) return;
                 break;
             case NONE:
                 break;
         }
-        switch(inst.opcode){
-            case ADD:
-                push(pop() + pop());
-                break;
-            case MUL:
-                push(pop() * pop());
-                break;
-            case SUB:
-                b = pop(); a = pop();
-                push(a - b);
-                break;
-            case DIV:
-                b = pop(); a = pop();
-                push(a / b);
-                break;
-            case MOD:
-                b = pop(); a = pop();
-                push(a % b);
-                break;
-            case LOADK:
-                push(inst.value);
-                break;
-            case LOAD:
-                push(memory[inst.value]);
-                break;
-            case STORE:
-                memory[inst.value] = pop();
-                break;
-            case DUP:
-                a = pop();
-                push(a);
-                push(a);
-                break;
-            case DUP2:
+
+        switch (inst.opcode) {
+            case ADD -> push(pop() + pop());
+            case MUL -> push(pop() * pop());
+            case SUB -> {
                 b = pop();
                 a = pop();
-                push(a); push(b);
-                push(a); push(b);
-                break;
-            case CMP:
+                push(a - b);
+            }
+            case DIV -> {
+                b = pop();
+                a = pop();
+                push(a / b);
+            }
+            case MOD -> {
+                b = pop();
+                a = pop();
+                push(a % b);
+            }
+            case LOADK -> push(inst.value);
+            case LOAD -> push(memory[inst.value]);
+            case STORE -> memory[inst.value] = pop();
+            case DUP -> {
+                a = pop();
+                push(a);
+                push(a);
+            }
+            case DUP2 -> {
+                b = pop();
+                a = pop();
+                push(a);
+                push(b);
+                push(a);
+                push(b);
+            }
+            case CMP -> {
                 b = pop();
                 a = pop();
                 zf = Integer.compare(a, b);
-                break;
-            case BR:
-                instructionPointer = inst.value - 1;
-                break;
-            case CALL:
+            }
+            case BR -> instructionPointer = inst.value - 1;
+            case CALL -> {
                 callStack[callStackPointer++] = instructionPointer;
                 instructionPointer = inst.value - 1;
-                break;
-            case RET:
-                instructionPointer = callStack[--callStackPointer];
-                break;
-            case EXIT:
-                halted = true;
-                break;
+            }
+            case RET -> instructionPointer = callStack[--callStackPointer];
+            case EXIT -> halted = true;
         }
     }
 
@@ -125,13 +116,13 @@ public class VM {
 
     int pop() {
         int result = stack[--stackPointer];
-        if(stackPointer > 0)
+        if (stackPointer > 0)
             zf = Integer.compare(stack[stackPointer - 1], 0);
         return result;
     }
 
-    public Integer top(){
-        if(stackPointer == 0) return null;
+    public Integer top() {
+        if (stackPointer == 0) return null;
         return stack[stackPointer - 1];
     }
 

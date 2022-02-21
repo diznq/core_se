@@ -19,7 +19,7 @@ public class AssetRepository {
     AtomicLong idCounter = new AtomicLong(0L);
     AtomicLong orderIdCounter = new AtomicLong(0L);
     AtomicLong time = new AtomicLong(0L);
-    Object accountingLock = new Object();
+    final Object accountingLock = new Object();
 
     Logger log = LoggerFactory.getLogger(AssetRepository.class);
 
@@ -33,14 +33,11 @@ public class AssetRepository {
     }
 
     public boolean transferTo(long accId, long assetId, long volume, String reason) {
-        synchronized(accountingLock){
+        synchronized (accountingLock) {
             Account account = getAccount(accId);
             if (account == null) return false;
             boolean result = account.transfer(assetId, volume);
-            if (!result && volume < 0L) {
-                return false;
-            }
-            return true;
+            return result || volume >= 0L;
         }
     }
 
@@ -120,7 +117,7 @@ public class AssetRepository {
     }
 
     public boolean hasEnough(long accId, long assetId, long required) {
-        synchronized(accountingLock){
+        synchronized (accountingLock) {
             Account account = getAccount(accId);
             return account.hasEnough(assetId, required);
         }

@@ -1,13 +1,13 @@
 package exchange.view;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-
 import exchange.core.AssetRepository;
 import exchange.core.Order;
 import exchange.core.OrderBook;
 import exchange.core.Tx;
+
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 public class OrderBookView {
     public String left;

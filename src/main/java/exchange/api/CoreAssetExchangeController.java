@@ -1,19 +1,17 @@
 package exchange.api;
 
+import exchange.core.Account;
+import exchange.core.AssetRepository;
+import exchange.core.Order;
+import exchange.core.OrderBook;
+import exchange.view.AccountView;
+import exchange.view.OrderBookView;
 import exchange.vm.Compiler;
 import exchange.vm.Script;
 import exchange.vm.ScriptResult;
 import exchange.vm.VM;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-
-import exchange.core.Account;
-import exchange.core.AssetRepository;
-import exchange.core.Order;
-import exchange.core.OrderBook;
-import exchange.view.*;
-
-import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
 
 @RestController
@@ -51,11 +49,11 @@ public class CoreAssetExchangeController {
 
     @PostMapping("/book/{base}/{quote}/bid")
     public Order placeBid(@PathVariable("base") String base,
-                            @PathVariable("quote") String quote,
-                            @RequestParam("account") String name,
-                            @RequestParam("price") Long price,
-                            @RequestParam("volume") Long volume,
-                            @RequestParam(value = "ttl", defaultValue = "0") Long ttl
+                          @PathVariable("quote") String quote,
+                          @RequestParam("account") String name,
+                          @RequestParam("price") Long price,
+                          @RequestParam("volume") Long volume,
+                          @RequestParam(value = "ttl", defaultValue = "0") Long ttl
     ) {
         Account account = assetRepository.getAccount(name);
         OrderBook ob = assetRepository.getOrderBook(base, quote);
@@ -64,11 +62,11 @@ public class CoreAssetExchangeController {
 
     @PostMapping("/book/{base}/{quote}/ask")
     public Order placeAsk(@PathVariable("base") String base,
-                            @PathVariable("quote") String quote,
-                            @RequestParam("account") String name,
-                            @RequestParam("price") Long price,
-                            @RequestParam("volume") Long volume,
-                            @RequestParam(value = "ttl", defaultValue = "0") Long ttl
+                          @PathVariable("quote") String quote,
+                          @RequestParam("account") String name,
+                          @RequestParam("price") Long price,
+                          @RequestParam("volume") Long volume,
+                          @RequestParam(value = "ttl", defaultValue = "0") Long ttl
     ) {
         Account account = assetRepository.getAccount(name);
         OrderBook ob = assetRepository.getOrderBook(base, quote);
@@ -77,7 +75,7 @@ public class CoreAssetExchangeController {
 
     @PostMapping("/tick")
     public Long tick(
-        @RequestParam(value = "steps", defaultValue = "1") Integer steps
+            @RequestParam(value = "steps", defaultValue = "1") Integer steps
     ) {
         long matches = 0L;
         for (int i = 0; i < steps; i++) {

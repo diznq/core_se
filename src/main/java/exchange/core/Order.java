@@ -1,8 +1,8 @@
 package exchange.core;
 
-import java.util.function.Consumer;
-
 import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import java.util.function.Consumer;
 
 public class Order {
     long id;
