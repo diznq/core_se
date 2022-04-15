@@ -3,6 +3,7 @@ package exchange.core;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Sinks;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -19,6 +20,7 @@ public class OrderBook {
     final Logger log = LoggerFactory.getLogger(OrderBook.class);
 
     final List<Tx> prices = Collections.synchronizedList(new ArrayList<>());
+    final Sinks.Many<Tx> sink = Sinks.many().multicast().onBackpressureBuffer();
     long left;
     long right;
     String name;
@@ -85,8 +87,9 @@ public class OrderBook {
                     lastPrice.set(price);
                     Tx tx = new Tx(repoTime, price, transferVolume);
                     prices.add(tx);
-                    askPeek.onFullfilled(tx);
-                    bidPeek.onFullfilled(tx);
+                    askPeek.onFulfilled(tx);
+                    bidPeek.onFulfilled(tx);
+                    sink.tryEmitNext(tx);
                     matched++;
                 } else {
                     break;
@@ -143,6 +146,11 @@ public class OrderBook {
 
     public String getName() {
         return name;
+    }
+
+    @JsonIgnore
+    public Sinks.Many<Tx> getSink() {
+        return sink;
     }
 
     public Order getTopBid() {

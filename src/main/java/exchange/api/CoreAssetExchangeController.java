@@ -1,9 +1,6 @@
 package exchange.api;
 
-import exchange.core.Account;
-import exchange.core.AssetRepository;
-import exchange.core.Order;
-import exchange.core.OrderBook;
+import exchange.core.*;
 import exchange.view.AccountView;
 import exchange.view.OrderBookView;
 import exchange.vm.Compiler;
@@ -11,7 +8,10 @@ import exchange.vm.Script;
 import exchange.vm.ScriptResult;
 import exchange.vm.VM;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
 
 @RestController
@@ -93,4 +93,12 @@ public class CoreAssetExchangeController {
     public ScriptResult exec(@RequestBody String script) {
         return VM.exec(Compiler.compile(script)).result();
     }
+
+    @GetMapping(path = "/book/{base}/{quote}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent> subscribeToStream(@PathVariable("base") String base,
+                                      @PathVariable("quote") String quote){
+        OrderBook ob = assetRepository.getOrderBook(base, quote);
+        return ob.getSink().asFlux().map(tx -> ServerSentEvent.builder(tx).build());
+    }
+
 }

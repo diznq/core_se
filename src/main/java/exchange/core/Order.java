@@ -90,7 +90,7 @@ public class Order {
         return ttl;
     }
 
-    public void onFullfilled(Tx tx) {
+    public void onFulfilled(Tx tx) {
         if (callback != null) {
             callback.accept(tx);
         }
