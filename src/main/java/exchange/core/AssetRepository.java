@@ -1,165 +1,111 @@
 package exchange.core;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import exchange.exc.InsufficientAssets;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
+@Slf4j
 public class AssetRepository {
-
-    Map<Long, Account> accounts = new ConcurrentHashMap<>();
-    Map<String, Long> ids = new ConcurrentHashMap<>();
-    Map<Long, String> idsReverse = new ConcurrentHashMap<>();
+    final Object accountingLock = new Object();
+    Map<String, Account> accounts = new ConcurrentHashMap<>();
     Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
     AtomicLong idCounter = new AtomicLong(0L);
     AtomicLong orderIdCounter = new AtomicLong(0L);
     AtomicLong time = new AtomicLong(0L);
-    final Object accountingLock = new Object();
-
-    Logger log = LoggerFactory.getLogger(AssetRepository.class);
 
     public AssetRepository() {
 
     }
 
-
-    public boolean transferTo(long accId, long assetId, long volume) {
-        return transferTo(accId, assetId, volume, "unknown");
-    }
-
-    public boolean transferTo(long accId, long assetId, long volume, String reason) {
+    public Mono<Boolean> transferTo(Account account, String asset, long volume, String reason) {
         synchronized (accountingLock) {
-            Account account = getAccount(accId);
-            if (account == null) return false;
-            boolean result = account.transfer(assetId, volume);
-            return result || volume >= 0L;
+            if (account == null) return Mono.just(false);
+            return account.transfer(asset, volume);
         }
     }
 
-    public boolean transferTo(Account account, String asset, long volume) {
-        return transferTo(account.getId(), getId(asset), volume);
-    }
-
-    public boolean transferTo(Account account, String asset, long volume, String reason) {
-        return transferTo(account.getId(), getId(asset), volume, reason);
-    }
-
-    public Account getAccount(long accId) {
-        if (accounts.containsKey(accId)) {
-            return accounts.get(accId);
+    public Mono<Account> getAccount(String name) {
+        if (!accounts.containsKey(name)) {
+            accounts.put(name, new Account(name));
         }
-        Account account = new Account(accId);
-        accounts.put(accId, account);
-        return account;
+        return Mono.just(accounts.get(name));
     }
 
-    public Account getAccount(String name) {
-        return getAccount(getId(name));
+    public Mono<Long> getOrderId() {
+        return Mono.just(orderIdCounter.getAndIncrement());
     }
 
-    public long getId(String symbol) {
-        if (ids.containsKey(symbol)) {
-            return ids.get(symbol);
-        }
-        long res = idCounter.incrementAndGet();
-        ids.put(symbol, res);
-        idsReverse.put(res, symbol);
-        return res;
-    }
-
-    public long getOrderId() {
-        return orderIdCounter.getAndIncrement();
-    }
-
-    public String getSymbol(long id) {
-        return idsReverse.get(id);
-    }
-
-    public OrderBook getOrderBook(String base, String quote) {
+    public Mono<OrderBook> getOrderBook(String base, String quote) {
         String common = base + quote;
-        long baseId = getId(base);
-        long quoteId = getId(quote);
         if (orderBooks.containsKey(common)) {
-            return orderBooks.get(common);
+            return Mono.just(orderBooks.get(common));
         }
-        OrderBook book = new OrderBook(baseId, quoteId, common);
+        OrderBook book = new OrderBook(base, quote, common);
         orderBooks.put(common, book);
-        return book;
+        return Mono.just(book);
     }
 
-    public Order placeBid(OrderBook orderBook, Order order, long ttl) {
-        if (!hasEnough(order.getAccount(), orderBook.getRight(), order.getVolume() * order.getPrice())) {
-            return null;
-        }
-        order.setId(getOrderId());
-        if (ttl != 0L) {
-            order.setTtl(getTime() + ttl);
-        }
-        orderBook.placeBid(order);
-        return order;
+    public Mono<Order> placeOrder(OrderBook orderBook, Order order, OrderSide side) {
+        String lockAsset = side == OrderSide.ASK ? orderBook.getLeft() : orderBook.getRight();
+        long lockVolume = side == OrderSide.ASK ? order.getVolume() : order.getVolume() * order.getPrice();
+        return hasEnough(
+                order.getAccount(),
+                lockAsset,
+                lockVolume
+        )
+                .zipWith(getOrderId())
+                .flatMap(result -> {
+                    boolean hasEnough = result.getT1();
+                    long nextId = result.getT2();
+                    if (!hasEnough) {
+                        return Mono.error(new InsufficientAssets(lockAsset, lockVolume));
+                    }
+                    return reserve(order.getAccount(), lockAsset, lockVolume)
+                            .flatMap(reserveOk -> {
+                                order.setId(nextId);
+                                return side == OrderSide.BID
+                                        ? orderBook.placeBid(order)
+                                        : orderBook.placeAsk(order);
+                            });
+                });
     }
 
-    public Order placeAsk(OrderBook orderBook, Order order, long ttl) {
-        if (!hasEnough(order.getAccount(), orderBook.getLeft(), order.getVolume())) {
-            return null;
-        }
-        order.setId(getOrderId());
-        if (ttl != 0L) {
-            order.setTtl(getTime() + ttl);
-        }
-        orderBook.placeAsk(order);
-        return order;
-    }
-
-    public boolean hasEnough(long accId, long assetId, long required) {
+    public Mono<Boolean> hasEnough(Account account, String assetId, long required) {
         synchronized (accountingLock) {
-            Account account = getAccount(accId);
             return account.hasEnough(assetId, required);
         }
     }
 
-    public long getTime() {
-        return time.get();
-    }
-
-    public long advance() {
-        long matches = 0L;
-        for (Map.Entry<String, OrderBook> ob : orderBooks.entrySet()) {
-            matches += ob.getValue().tick(this);
+    public Mono<Boolean> reserve(Account account, String assetId, long required) {
+        synchronized (accountingLock) {
+            return account.reserve(assetId, required);
         }
-        time.incrementAndGet();
-        return matches;
     }
 
-    public List<OrderBook> getOrderBooks() {
-        return orderBooks.values().stream().toList();
+
+    public Long getTime() {
+        return System.currentTimeMillis();
     }
 
-    public long getOutstandingShares(long assetId, long accountId) {
-        long total = 0;
-        for (Account account : accounts.values()) {
-            if (account.getId() == accountId) continue;
-            total += account.getVolume(assetId);
-        }
-        return total;
+    public Mono<Long> advance() {
+        final long timeNow = getTime();
+        return Flux.fromIterable(orderBooks.entrySet())
+                .flatMap(ob -> ob.getValue().matchMultiple(this, timeNow))
+                .reduce(Long::sum)
+                .flatMap(result -> {
+                    time.incrementAndGet();
+                    return Mono.just(result);
+                });
     }
 
-    public long getTotalAssets(Account acc, String currency) {
-        long total = 0L;
-        Map<Long, Long> assets = acc.getPublicAssets();
-        for (Map.Entry<Long, Long> asset : assets.entrySet()) {
-            if (getSymbol(asset.getKey()).equals(currency)) {
-                total += asset.getValue();
-                continue;
-            }
-            OrderBook orderBook = getOrderBook(getSymbol(asset.getKey()), currency);
-            total += asset.getValue() * orderBook.getLastPrice();
-        }
-        return total;
+    public Flux<OrderBook> getOrderBooks() {
+        return Flux.fromIterable(orderBooks.values().stream().toList());
     }
 }

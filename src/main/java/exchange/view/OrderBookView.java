@@ -20,17 +20,9 @@ public class OrderBookView {
     public AggregateOrderView topBid;
     public AggregateOrderView topAsk;
 
-    private List<AggregateOrderView> toAggregate(Map<Long, Long> side) {
-        List<AggregateOrderView> orders = new LinkedList<>();
-        for (Map.Entry<Long, Long> entry : side.entrySet()) {
-            orders.add(new AggregateOrderView(entry.getKey(), entry.getValue()));
-        }
-        return orders;
-    }
-
     public OrderBookView(OrderBook ob, AssetRepository repository) {
-        left = repository.getSymbol(ob.getLeft());
-        right = repository.getSymbol(ob.getRight());
+        left = ob.getLeft();
+        right = ob.getRight();
         name = ob.getName();
         bid = toAggregate(ob.getBids()).stream().sorted(AggregateOrderView::inverseCompare).toList();
         ask = toAggregate(ob.getAsks()).stream().sorted(AggregateOrderView::compare).toList();
@@ -42,5 +34,13 @@ public class OrderBookView {
             topAsk = new AggregateOrderView(bestAsk.getPrice(), bestAsk.getVolume());
         lastPrice = ob.getLastPrice();
         history = ob.getPriceHistory();
+    }
+
+    private List<AggregateOrderView> toAggregate(Map<Long, Long> side) {
+        List<AggregateOrderView> orders = new LinkedList<>();
+        for (Map.Entry<Long, Long> entry : side.entrySet()) {
+            orders.add(new AggregateOrderView(entry.getKey(), entry.getValue()));
+        }
+        return orders;
     }
 }

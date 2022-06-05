@@ -7,58 +7,6 @@ import java.util.TreeMap;
 
 public class Compiler {
 
-    static class SemiInstruction {
-        Opcode opcode;
-        Condition condition;
-        String imm;
-        Scope scope;
-    }
-
-    static class Scope {
-        static int scopeCounter = 0;
-        int scopeId = scopeCounter++;
-        int varCounter = 0;
-        Map<String, Integer> labels = new TreeMap<>();
-        Scope parent;
-
-        Integer getIndex(String label, boolean create) {
-            if (labels.containsKey(label)) {
-                return labels.get(label);
-            } else {
-                if (parent != null) {
-                    Integer parentIdx = parent.getIndex(label, false);
-                    if (parentIdx != null) {
-                        return parentIdx;
-                    }
-                }
-            }
-            if (create) {
-                int offset = getOffset();
-                labels.put(label, offset);
-                varCounter++;
-                return offset;
-            } else {
-                return null;
-            }
-        }
-
-        Scope createChild() {
-            Scope scope = new Scope();
-            scope.varCounter = 0;
-            scope.parent = this;
-            return scope;
-        }
-
-        int getOffset() {
-            if (parent == null) return varCounter;
-            return varCounter + parent.getOffset();
-        }
-
-        void put(String key, Integer value) {
-            labels.put(key, value);
-        }
-    }
-
     public static Script compile(String code) {
         Scope activeScope = new Scope();
         final List<SemiInstruction> semiInstructions = new ArrayList<>();
@@ -128,5 +76,57 @@ public class Compiler {
         Script script = new Script();
         script.instructions = instructions;
         return script;
+    }
+
+    static class SemiInstruction {
+        Opcode opcode;
+        Condition condition;
+        String imm;
+        Scope scope;
+    }
+
+    static class Scope {
+        static int scopeCounter = 0;
+        int scopeId = scopeCounter++;
+        int varCounter = 0;
+        Map<String, Integer> labels = new TreeMap<>();
+        Scope parent;
+
+        Integer getIndex(String label, boolean create) {
+            if (labels.containsKey(label)) {
+                return labels.get(label);
+            } else {
+                if (parent != null) {
+                    Integer parentIdx = parent.getIndex(label, false);
+                    if (parentIdx != null) {
+                        return parentIdx;
+                    }
+                }
+            }
+            if (create) {
+                int offset = getOffset();
+                labels.put(label, offset);
+                varCounter++;
+                return offset;
+            } else {
+                return null;
+            }
+        }
+
+        Scope createChild() {
+            Scope scope = new Scope();
+            scope.varCounter = 0;
+            scope.parent = this;
+            return scope;
+        }
+
+        int getOffset() {
+            if (parent == null) return varCounter;
+            return varCounter + parent.getOffset();
+        }
+
+        void put(String key, Integer value) {
+            labels.put(key, value);
+        }
     }
 }

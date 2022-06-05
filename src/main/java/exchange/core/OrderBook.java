@@ -1,121 +1,90 @@
 package exchange.core;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class OrderBook {
-    final AtomicLong lastPrice = new AtomicLong(1L);
-    @JsonIgnore
+    final AtomicLong lastPrice = new AtomicLong(0L);
     final PriorityQueue<Order> bid = new PriorityQueue<>(Order::inverseCompare);
-    @JsonIgnore
     final PriorityQueue<Order> ask = new PriorityQueue<>(Order::compare);
-    @JsonIgnore
     final Object sync = new Object();
-    @JsonIgnore
-    final Logger log = LoggerFactory.getLogger(OrderBook.class);
 
     final List<Tx> prices = Collections.synchronizedList(new ArrayList<>());
     final Sinks.Many<Tx> sink = Sinks.many().multicast().onBackpressureBuffer();
-    long left;
-    long right;
+    String left;
+    String right;
     String name;
 
-    public OrderBook(long baseId, long quoteId, String name) {
+    public OrderBook(String baseId, String quoteId, String name) {
         this.name = name;
         this.left = baseId;
         this.right = quoteId;
     }
 
-    void placeBid(Order order) {
+    Mono<Order> placeBid(Order order) {
         synchronized (sync) {
             bid.add(order);
+            return Mono.just(order);
         }
     }
 
-    void placeAsk(Order order) {
+    Mono<Order> placeAsk(Order order) {
         synchronized (sync) {
             ask.add(order);
+            return Mono.just(order);
         }
     }
 
     long determinePrice(Order a, Order b) {
-        return a.id < b.id ? a.price : b.price;
+        return a.compareAtSamePrice(b) < 0 ? a.price : b.price;
     }
 
-    long matchMultiple(AssetRepository repo) {
-        long matched = 0L;
-        final List<Order> bidsToRemove = new LinkedList<>();
-        final List<Order> asksToRemove = new LinkedList<>();
-        final long repoTime = repo.getTime();
-        for (Order bidPeek : bid) {
-            if (bidPeek.isCancellable() && bidPeek.ttl != 0L && repoTime > bidPeek.ttl) {
-                bidsToRemove.add(bidPeek);
-                continue;
-            }
-            if (!repo.hasEnough(bidPeek.account, right, bidPeek.price * bidPeek.volume)) {
-                bidsToRemove.add(bidPeek);
-                continue;
-            }
-            for (Order askPeek : ask) {
-                if (askPeek.isCancellable() && askPeek.ttl != 0L && repoTime > askPeek.ttl) {
-                    asksToRemove.add(askPeek);
-                    continue;
-                }
-                if (!repo.hasEnough(askPeek.account, left, askPeek.volume)) {
-                    asksToRemove.add(askPeek);
-                    continue;
-                }
-                if (bidPeek.price >= askPeek.price) {
+    Mono<Long> matchMultiple(AssetRepository repo, final long repoTime) {
+        return Flux.fromIterable(bid)
+                .zipWith(Flux.fromIterable(ask))
+                .filter(tuple -> {
+                    Order bidPeek = tuple.getT1();
+                    Order askPeek = tuple.getT2();
+                    long transferVolume = Long.min(bidPeek.getRealVolume(), askPeek.getRealVolume());
+                    return transferVolume > 0L && bidPeek.getPrice() >= askPeek.getPrice();
+                })
+                .flatMap(tuple -> {
+                    Order bidPeek = tuple.getT1();
+                    Order askPeek = tuple.getT2();
                     long price = determinePrice(bidPeek, askPeek);
-                    long transferVolume = Long.min(bidPeek.volume, askPeek.volume);
-                    if (transferVolume == 0L) continue;
-                    askPeek.touch();
-                    bidPeek.touch();
-                    askPeek.increaseVolume(-transferVolume);
-                    bidPeek.increaseVolume(-transferVolume);
-                    if (askPeek.getVolume() == 0L) asksToRemove.add(askPeek);
-                    if (bidPeek.getVolume() == 0L) bidsToRemove.add(bidPeek);
-                    repo.transferTo(bidPeek.account, right, -price * transferVolume, "bid-right-rem");
-                    repo.transferTo(bidPeek.account, left, transferVolume, "bid-left-add");
-                    repo.transferTo(askPeek.account, right, price * transferVolume, "ask-right-add");
-                    repo.transferTo(askPeek.account, left, -transferVolume, "ask-left-rem");
-                    lastPrice.set(price);
-                    Tx tx = new Tx(repoTime, price, transferVolume);
-                    prices.add(tx);
-                    askPeek.onFulfilled(tx);
-                    bidPeek.onFulfilled(tx);
-                    sink.tryEmitNext(tx);
-                    matched++;
-                } else {
-                    break;
-                }
-            }
-        }
-        bid.removeAll(bidsToRemove);
-        ask.removeAll(asksToRemove);
-        return matched;
-    }
-
-    long tick(AssetRepository repository) {
-        long matches = 0L;
-        synchronized (sync) {
-            matches += matchMultiple(repository);
-        }
-        return matches;
+                    long transferVolume = Long.min(bidPeek.getRealVolume(), askPeek.getRealVolume());
+                    askPeek.fill(transferVolume);
+                    bidPeek.fill(transferVolume);
+                    return repo
+                            .transferTo(bidPeek.account, right, -price * transferVolume, "bid-right-rem")
+                            .zipWith(repo.transferTo(bidPeek.account, left, transferVolume, "bid-left-add"))
+                            .zipWith(repo.transferTo(askPeek.account, right, price * transferVolume, "ask-right-add"))
+                            .zipWith(repo.transferTo(askPeek.account, left, -transferVolume, "ask-left-rem"))
+                            .flatMap(result -> {
+                                Tx tx = new Tx(repoTime, price, transferVolume);
+                                prices.add(tx);
+                                askPeek.onFulfilled(tx);
+                                bidPeek.onFulfilled(tx);
+                                sink.tryEmitNext(tx);
+                                lastPrice.set(price);
+                                return Mono.just(1L);
+                            });
+                })
+                .reduce(Long::sum);
     }
 
     private Map<Long, Long> summarizeSide(final PriorityQueue<Order> orders) {
         Map<Long, Long> summary = new HashMap<>();
         for (Order order : orders) {
-            if (!summary.containsKey(order.price)) {
-                summary.put(order.price, 0L);
+            if (!summary.containsKey(order.getPrice())) {
+                summary.put(order.getPrice(), 0L);
             }
-            summary.put(order.price, summary.get(order.price) + order.volume);
+            summary.put(order.getPrice(), summary.get(order.getPrice()) + order.getRealVolume());
         }
         return summary;
     }
@@ -128,11 +97,11 @@ public class OrderBook {
         return summarizeSide(ask);
     }
 
-    public long getLeft() {
+    public String getLeft() {
         return left;
     }
 
-    public long getRight() {
+    public String getRight() {
         return right;
     }
 

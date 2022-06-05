@@ -1,111 +1,63 @@
 package exchange.core;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import lombok.Data;
+import lombok.Getter;
 
 import java.util.function.Consumer;
 
+@Data
 public class Order {
-    long id;
+    public long id;
+    @Getter
     long price;
+    @Getter
+    long priority;
+    @Getter
+    long filled;
+    @Getter
     long volume;
-    long account;
-    long ttl = 0L;
-    boolean touched = false;
-    Consumer<Tx> callback;
+    @Getter
+    Account account;
 
-    public Order(long price, long volume, long account) {
+    private Consumer<Tx> callback;
+
+    public Order(long price, long volume, Account account) {
         this.price = price;
+        this.filled = 0;
         this.volume = volume;
         this.account = account;
     }
 
-    public Order(long price, long volume, long account, Consumer<Tx> callback) {
-        this.price = price;
-        this.volume = volume;
-        this.account = account;
-        this.callback = callback;
-    }
-
-    public Order(long price, long volume, long account, long id) {
-        this.price = price;
-        this.volume = volume;
-        this.account = account;
-        this.id = id;
+    public long getRealVolume() {
+        return volume - filled;
     }
 
     public int compare(Order other) {
         int priceResult = Long.compare(price, other.price);
         if (priceResult == 0) {
-            return Long.compare(id, other.id);
+            return compareAtSamePrice(other);
         }
         return priceResult;
+    }
+
+    public int compareAtSamePrice(Order other) {
+        int priorityResult = Long.compare(priority, other.priority);
+        if (priorityResult == 0)
+            return Long.compare(id, other.id);
+        return -priorityResult;
     }
 
     public int inverseCompare(Order other) {
-        int priceResult = Long.compare(other.price, price);
-        if (priceResult == 0) {
-            return Long.compare(id, other.id);
-        }
-        return priceResult;
+        return -compare(other);
     }
 
-    public long getPrice() {
-        return price;
-    }
-
-    public long getVolume() {
-        return volume;
-    }
-
-    public long getAccount() {
-        return account;
-    }
-
-    public long increaseVolume(long volume) {
-        this.volume += volume;
-        return this.volume;
-    }
-
-    public void setId(long id) {
-        this.id = id;
-    }
-
-    public boolean isCancellable() {
-        return true;
-    }
-
-    public void touch() {
-        touched = true;
-    }
-
-    public boolean isTouched() {
-        return touched;
-    }
-
-    public void setTtl(long ttl) {
-        this.ttl = ttl;
-    }
-
-    public long getTtl() {
-        return ttl;
+    public void fill(long volume) {
+        this.filled += volume;
     }
 
     public void onFulfilled(Tx tx) {
         if (callback != null) {
             callback.accept(tx);
         }
-    }
-
-    public void setCallback(Consumer<Tx> callback) {
-        this.callback = callback;
-    }
-
-    @JsonIgnore
-    public Consumer<Tx> getCallback() {
-        return callback;
-    }
-
-    public long getId() {
-        return id;
     }
 }
