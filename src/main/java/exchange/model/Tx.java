@@ -1,4 +1,4 @@
-package exchange.core;
+package exchange.model;
 
 public class Tx {
     public long time;

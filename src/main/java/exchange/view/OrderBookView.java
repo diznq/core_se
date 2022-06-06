@@ -1,9 +1,9 @@
 package exchange.view;
 
-import exchange.core.AssetRepository;
-import exchange.core.Order;
+import exchange.core.AssetManager;
 import exchange.core.OrderBook;
-import exchange.core.Tx;
+import exchange.model.Order;
+import exchange.model.Tx;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -20,7 +20,7 @@ public class OrderBookView {
     public AggregateOrderView topBid;
     public AggregateOrderView topAsk;
 
-    public OrderBookView(OrderBook ob, AssetRepository repository) {
+    public OrderBookView(OrderBook ob, AssetManager repository) {
         left = ob.getLeft();
         right = ob.getRight();
         name = ob.getName();
@@ -29,9 +29,9 @@ public class OrderBookView {
         Order bestBid = ob.getTopBid();
         Order bestAsk = ob.getTopAsk();
         if (bestBid != null)
-            topBid = new AggregateOrderView(bestBid.getPrice(), bestBid.getVolume());
+            topBid = new AggregateOrderView(bestBid.getPrice(), bestBid.getRealVolume());
         if (bestAsk != null)
-            topAsk = new AggregateOrderView(bestAsk.getPrice(), bestAsk.getVolume());
+            topAsk = new AggregateOrderView(bestAsk.getPrice(), bestAsk.getRealVolume());
         lastPrice = ob.getLastPrice();
         history = ob.getPriceHistory();
     }

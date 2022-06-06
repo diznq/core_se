@@ -1,9 +1,7 @@
-package exchange.core;
+package exchange.model;
 
 import lombok.Data;
 import lombok.Getter;
-
-import java.util.function.Consumer;
 
 @Data
 public class Order {
@@ -18,8 +16,6 @@ public class Order {
     long volume;
     @Getter
     Account account;
-
-    private Consumer<Tx> callback;
 
     public Order(long price, long volume, Account account) {
         this.price = price;
@@ -53,11 +49,5 @@ public class Order {
 
     public void fill(long volume) {
         this.filled += volume;
-    }
-
-    public void onFulfilled(Tx tx) {
-        if (callback != null) {
-            callback.accept(tx);
-        }
     }
 }

@@ -1,9 +1,9 @@
 package exchange.api;
 
-import exchange.core.AssetRepository;
-import exchange.core.Order;
-import exchange.core.OrderSide;
-import exchange.core.Tx;
+import exchange.constant.OrderSide;
+import exchange.core.AssetManager;
+import exchange.model.Order;
+import exchange.model.Tx;
 import exchange.view.AccountView;
 import exchange.view.OrderBookView;
 import exchange.vm.Compiler;
@@ -20,55 +20,53 @@ import reactor.core.publisher.Mono;
 @RestController
 public class CoreAssetExchangeController {
     @Autowired
-    AssetRepository assetRepository;
+    AssetManager assetManager;
 
     @PostMapping("/book/{base}/{quote}")
     public Mono<OrderBookView> createOrderBook(@PathVariable("base") String base, @PathVariable("quote") String quote) {
-        return assetRepository
+        return assetManager
                 .getOrderBook(base, quote)
-                .map(ob -> new OrderBookView(ob, assetRepository));
+                .map(ob -> new OrderBookView(ob, assetManager));
     }
 
     @GetMapping("/book/{base}/{quote}")
     public Mono<OrderBookView> getOrderBook(@PathVariable("base") String base, @PathVariable("quote") String quote) {
-        return assetRepository
+        return assetManager
                 .getOrderBook(base, quote)
-                .map(ob -> new OrderBookView(ob, assetRepository));
+                .map(ob -> new OrderBookView(ob, assetManager));
     }
 
     @GetMapping(path = "/book/{base}/{quote}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<Tx>> subscribeToStream(@PathVariable("base") String base,
                                                        @PathVariable("quote") String quote) {
-        return assetRepository
+        return assetManager
                 .getOrderBook(base, quote)
                 .flatMapMany(ob -> ob.getSink().asFlux().map(tx -> ServerSentEvent.builder(tx).build()));
     }
 
     @PostMapping("/account/{account}")
     public Mono<AccountView> createAccount(@PathVariable("account") String name) {
-        return assetRepository
+        return assetManager
                 .getAccount(name)
-                .map(account -> new AccountView(account, assetRepository));
+                .map(account -> new AccountView(account, assetManager));
     }
 
     @GetMapping("/account/{account}")
     public Mono<AccountView> getAccount(@PathVariable("account") String name) {
-        return assetRepository
+        return assetManager
                 .getAccount(name)
-                .map(account -> new AccountView(account, assetRepository));
+                .map(account -> new AccountView(account, assetManager));
     }
 
     @PostMapping("/account/{account}/deposit/{asset}")
     public Mono<AccountView> depositAssets(@PathVariable("account") String name, @PathVariable("asset") String asset,
                                            @RequestParam("volume") Long volume) {
-        return assetRepository
+        return assetManager
                 .getAccount(name)
-                .flatMap(account ->
-                        assetRepository
-                                .transferTo(account, asset, volume, "deposit")
-                                .thenReturn(account)
-                )
-                .map(account -> new AccountView(account, assetRepository));
+                .map(account -> {
+                    assetManager.transferTo(account, asset, volume, "deposit");
+                    return new AccountView(account, assetManager);
+                });
     }
 
     @PostMapping("/book/{base}/{quote}/bid")
@@ -78,9 +76,9 @@ public class CoreAssetExchangeController {
                                 @RequestParam("price") Long price,
                                 @RequestParam("volume") Long volume
     ) {
-        return assetRepository.getAccount(name)
-                .zipWith(assetRepository.getOrderBook(base, quote))
-                .flatMap(tuple -> assetRepository.placeOrder(
+        return assetManager.getAccount(name)
+                .zipWith(assetManager.getOrderBook(base, quote))
+                .flatMap(tuple -> assetManager.placeOrder(
                         tuple.getT2(),
                         new Order(price, volume, tuple.getT1()),
                         OrderSide.BID
@@ -94,9 +92,9 @@ public class CoreAssetExchangeController {
                                 @RequestParam("price") Long price,
                                 @RequestParam("volume") Long volume
     ) {
-        return assetRepository.getAccount(name)
-                .zipWith(assetRepository.getOrderBook(base, quote))
-                .flatMap(tuple -> assetRepository.placeOrder(
+        return assetManager.getAccount(name)
+                .zipWith(assetManager.getOrderBook(base, quote))
+                .flatMap(tuple -> assetManager.placeOrder(
                         tuple.getT2(),
                         new Order(price, volume, tuple.getT1()),
                         OrderSide.ASK
@@ -108,7 +106,7 @@ public class CoreAssetExchangeController {
             @RequestParam(value = "steps", defaultValue = "1") Integer steps
     ) {
         return Flux.range(0, steps)
-                .flatMap(step -> assetRepository.advance())
+                .flatMap(step -> assetManager.advance())
                 .reduce(Long::sum);
     }
 

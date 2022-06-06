@@ -1,6 +1,8 @@
 package exchange.core;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import exchange.model.Order;
+import exchange.model.Tx;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -16,6 +18,7 @@ public class OrderBook {
 
     final List<Tx> prices = Collections.synchronizedList(new ArrayList<>());
     final Sinks.Many<Tx> sink = Sinks.many().multicast().onBackpressureBuffer();
+
     String left;
     String right;
     String name;
@@ -41,37 +44,46 @@ public class OrderBook {
     }
 
     long determinePrice(Order a, Order b) {
-        return a.compareAtSamePrice(b) < 0 ? a.price : b.price;
+        return a.compareAtSamePrice(b) < 0 ? a.getPrice() : b.getPrice();
     }
 
-    Mono<Long> matchMultiple(AssetRepository repo, final long repoTime) {
-        return Flux.fromIterable(bid)
-                .zipWith(Flux.fromIterable(ask))
-                .filter(tuple -> {
-                    Order bidPeek = tuple.getT1();
-                    Order askPeek = tuple.getT2();
-                    long transferVolume = Long.min(bidPeek.getRealVolume(), askPeek.getRealVolume());
-                    return transferVolume > 0L && bidPeek.getPrice() >= askPeek.getPrice();
-                })
+    Mono<Long> matchMultiple(AssetManager repo, final long repoTime) {
+        final List<Pair> combinations = new LinkedList<>();
+        final List<Order> bidsToRemove = new LinkedList<>();
+        final List<Order> asksToRemove = new LinkedList<>();
+        boolean endSearch = false;
+        for (Order bidPeek : bid) {
+            for (Order askPeek : ask) {
+                if (bidPeek.getPrice() < askPeek.getPrice()) {
+                    endSearch = true;
+                    break;
+                }
+                long bidVolume = bidPeek.getRealVolume();
+                long askVolume = askPeek.getRealVolume();
+                if (bidVolume == 0L || askVolume == 0L) {
+                    if (bidVolume == 0L) bidsToRemove.add(bidPeek);
+                    if (askVolume == 0L) asksToRemove.add(askPeek);
+                    continue;
+                }
+                combinations.add(new Pair(bidPeek, askPeek));
+            }
+            if (endSearch) break;
+        }
+        bid.removeAll(bidsToRemove);
+        ask.removeAll(asksToRemove);
+
+        return Flux.fromIterable(combinations)
                 .flatMap(tuple -> {
-                    Order bidPeek = tuple.getT1();
-                    Order askPeek = tuple.getT2();
+                    Order bidPeek = tuple.bid;
+                    Order askPeek = tuple.ask;
                     long price = determinePrice(bidPeek, askPeek);
                     long transferVolume = Long.min(bidPeek.getRealVolume(), askPeek.getRealVolume());
-                    askPeek.fill(transferVolume);
-                    bidPeek.fill(transferVolume);
                     return repo
-                            .transferTo(bidPeek.account, right, -price * transferVolume, "bid-right-rem")
-                            .zipWith(repo.transferTo(bidPeek.account, left, transferVolume, "bid-left-add"))
-                            .zipWith(repo.transferTo(askPeek.account, right, price * transferVolume, "ask-right-add"))
-                            .zipWith(repo.transferTo(askPeek.account, left, -transferVolume, "ask-left-rem"))
+                            .transaction(bidPeek, askPeek, left, right, price, transferVolume)
                             .flatMap(result -> {
                                 Tx tx = new Tx(repoTime, price, transferVolume);
                                 prices.add(tx);
-                                askPeek.onFulfilled(tx);
-                                bidPeek.onFulfilled(tx);
                                 sink.tryEmitNext(tx);
-                                lastPrice.set(price);
                                 return Mono.just(1L);
                             });
                 })
@@ -128,5 +140,15 @@ public class OrderBook {
 
     public Order getTopAsk() {
         return ask.peek();
+    }
+
+    public final class Pair {
+        Order bid;
+        Order ask;
+
+        public Pair(Order bid, Order ask) {
+            this.bid = bid;
+            this.ask = ask;
+        }
     }
 }

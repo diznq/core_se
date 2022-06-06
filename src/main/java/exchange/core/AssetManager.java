@@ -1,8 +1,15 @@
 package exchange.core;
 
+import exchange.constant.OrderSide;
 import exchange.exc.InsufficientAssets;
+import exchange.model.Account;
+import exchange.model.Asset;
+import exchange.model.Order;
+import exchange.service.AccountService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -12,30 +19,32 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @Slf4j
-public class AssetRepository {
-    final Object accountingLock = new Object();
-    Map<String, Account> accounts = new ConcurrentHashMap<>();
+public class AssetManager {
     Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
-    AtomicLong idCounter = new AtomicLong(0L);
     AtomicLong orderIdCounter = new AtomicLong(0L);
     AtomicLong time = new AtomicLong(0L);
 
-    public AssetRepository() {
+    @Autowired
+    AccountService accountService;
 
-    }
+    public AssetManager() {
 
-    public Mono<Boolean> transferTo(Account account, String asset, long volume, String reason) {
-        synchronized (accountingLock) {
-            if (account == null) return Mono.just(false);
-            return account.transfer(asset, volume);
-        }
     }
 
     public Mono<Account> getAccount(String name) {
-        if (!accounts.containsKey(name)) {
-            accounts.put(name, new Account(name));
-        }
-        return Mono.just(accounts.get(name));
+        return Mono.justOrEmpty(accountService.getAccountByName(name));
+    }
+
+    public Asset transferTo(Account account, String asset, long volume, String reason) {
+        return accountService.transfer(account, asset, volume);
+    }
+
+    public Mono<Boolean> hasEnough(Account account, String assetId, long required) {
+        return accountService.hasEnough(account, assetId, required);
+    }
+
+    public Asset reserve(Account account, String assetId, long required) {
+        return accountService.reserve(account, assetId, required);
     }
 
     public Mono<Long> getOrderId() {
@@ -67,28 +76,30 @@ public class AssetRepository {
                     if (!hasEnough) {
                         return Mono.error(new InsufficientAssets(lockAsset, lockVolume));
                     }
-                    return reserve(order.getAccount(), lockAsset, lockVolume)
-                            .flatMap(reserveOk -> {
-                                order.setId(nextId);
-                                return side == OrderSide.BID
-                                        ? orderBook.placeBid(order)
-                                        : orderBook.placeAsk(order);
-                            });
+                    Asset reserveOk = reserve(order.getAccount(), lockAsset, lockVolume);
+                    order.setId(nextId);
+                    return side == OrderSide.BID
+                            ? orderBook.placeBid(order)
+                            : orderBook.placeAsk(order);
                 });
     }
 
-    public Mono<Boolean> hasEnough(Account account, String assetId, long required) {
-        synchronized (accountingLock) {
-            return account.hasEnough(assetId, required);
-        }
-    }
+    @Transactional
+    public Mono<Boolean> transaction(Order bidPeek, Order askPeek, String left, String right, long price,
+                                     long transferVolume) {
+        askPeek.fill(transferVolume);
+        bidPeek.fill(transferVolume);
+        Account bidderAccount = bidPeek.getAccount();
+        Account askerAccount = askPeek.getAccount();
+        transferTo(bidderAccount, right, -price * transferVolume, "bid-right-rem");
+        reserve(bidderAccount, right, -price * transferVolume);
+        transferTo(bidderAccount, left, transferVolume, "bid-left-add");
 
-    public Mono<Boolean> reserve(Account account, String assetId, long required) {
-        synchronized (accountingLock) {
-            return account.reserve(assetId, required);
-        }
+        transferTo(askerAccount, right, price * transferVolume, "ask-right-add");
+        transferTo(askerAccount, left, -transferVolume, "ask-left-rem");
+        reserve(askerAccount, left, -transferVolume);
+        return Mono.just(true);
     }
-
 
     public Long getTime() {
         return System.currentTimeMillis();
@@ -107,5 +118,9 @@ public class AssetRepository {
 
     public Flux<OrderBook> getOrderBooks() {
         return Flux.fromIterable(orderBooks.values().stream().toList());
+    }
+
+    public Map<String, Long> getPublicAssets(Account account) {
+        return accountService.getPublicAssets(account);
     }
 }
